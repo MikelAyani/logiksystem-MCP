@@ -10,7 +10,8 @@ DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 def copy_diags(filename):
     DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3", "idiagnostic4", "idiagnostic5"]
     try:
-        tree = etree.parse(filename)
+        parser = etree.XMLParser(strip_cdata=False)
+        tree = etree.parse(filename, parser)
         xml_root = tree.getroot()
 
         AOIs_with_diagnostics = {}
@@ -62,30 +63,33 @@ def copy_diags(filename):
                                     text = loc_comm.text.replace("\n", "")
                                     if text != "":
                                         checklist[word][bit] = True
-                                        print(tag_name, param_name, word, bit, lan, text)
-                    for word in range(3):
-                        for bit in range(32):
-                            if not checklist[word][bit]:
-                                """
-                                <Comment Operand=".IDIAGNOSTIC2.1">
-                                <LocalizedComment Lang="en-GB">
-                                <![CDATA[UF_Ilegal Variant ID from PLC]]>
-                                </LocalizedComment>
-                                <LocalizedComment Lang="sv-SE">
-                                <![CDATA[UF_Gripare strö helt stängd (Tappat strö?)]]>
-                                </LocalizedComment>
-                                </Comment>
-                                """
-                                new_comment = etree.SubElement(comments, "Comment")
-                                new_comment.set('Operand', f".IDIAGNOSTIC{word+1}.{bit}")
-                                for lang in ["en-GB", "sv-SE"]:
-                                    loc_comment = etree.SubElement(new_comment, "LocalizedComment")
-                                    loc_comment.set('Lang', lang)
-                                    text_comment = AOI_Global[word][bit][lang]
-                                    loc_comment.text = etree.CDATA(text_comment)
-                                    print(tag_name, param_name, word, bit, lang, text_comment)
+                                        #print(tag_name, param_name, word, bit, lan, text)
+                else:
+                    comments = etree.Element("Comments")
+                    tag.insert(0, comments)
+                for word in range(3):
+                    for bit in range(32):
+                        if not checklist[word][bit]:
+                            """
+                            <Comment Operand=".IDIAGNOSTIC2.1">
+                            <LocalizedComment Lang="en-GB">
+                            <![CDATA[UF_Ilegal Variant ID from PLC]]>
+                            </LocalizedComment>
+                            <LocalizedComment Lang="sv-SE">
+                            <![CDATA[UF_Gripare strö helt stängd (Tappat strö?)]]>
+                            </LocalizedComment>
+                            </Comment>
+                            """
+                            new_comment = etree.SubElement(comments, "Comment")
+                            new_comment.set('Operand', f".IDIAGNOSTIC{word+1}.{bit}")
+                            for lang in ["en-GB", "sv-SE"]:
+                                loc_comment = etree.SubElement(new_comment, "LocalizedComment")
+                                loc_comment.set('Lang', lang)
+                                text_comment = AOI_Global[word][bit][lang]
+                                loc_comment.text = etree.CDATA(text_comment)
+                                #print(tag_name, param_name, word, bit, lang, text_comment)
                     
-        tree.write("output.L5X")
+        tree.write("output.L5X",encoding="utf-8", xml_declaration=True)
     except Exception as e:
         print(f"Error parsing {filename}: {e}")
 
