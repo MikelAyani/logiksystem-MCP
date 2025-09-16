@@ -3,7 +3,7 @@ from lxml import etree
 import csv
 
 # Configuration
-FILENAME = "./data/_13_CCHA_OP010_240417.L5X"
+FILENAME = "./data/_13_EXC_OP090.L5X"
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 
 # Crawl directory and process XML files
