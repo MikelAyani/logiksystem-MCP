@@ -3,7 +3,7 @@ from lxml import etree
 import csv
 
 # Configuration
-FILENAME = "./data/_13_EXC_OP090.L5X"
+FILENAME = "_13_EXC_OP090.L5X"
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 
 # Crawl directory and process XML files
@@ -11,7 +11,7 @@ def copy_diags(filename):
     DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3", "idiagnostic4", "idiagnostic5"]
     try:
         parser = etree.XMLParser(strip_cdata=False)
-        tree = etree.parse(filename, parser)
+        tree = etree.parse("./data/"+filename, parser)
         xml_root = tree.getroot()
 
         AOIs_with_diagnostics = {}
@@ -66,7 +66,9 @@ def copy_diags(filename):
                                         #print(tag_name, param_name, word, bit, lan, text)
                 else:
                     comments = etree.Element("Comments")
-                    tag.insert(0, comments)
+                    data_node = tag.find("Data")
+                    i = tag.index(data_node)
+                    tag.insert(i, comments)
                 for word in range(3):
                     for bit in range(32):
                         if not checklist[word][bit]:
@@ -89,7 +91,7 @@ def copy_diags(filename):
                                 loc_comment.text = etree.CDATA(text_comment)
                                 #print(tag_name, param_name, word, bit, lang, text_comment)
                     
-        tree.write("output.L5X",encoding="utf-8", xml_declaration=True)
+        tree.write(FILENAME,encoding="utf-8", xml_declaration=True)
     except Exception as e:
         print(f"Error parsing {filename}: {e}")
 
