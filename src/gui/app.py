@@ -2,12 +2,17 @@
 import dearpygui.dearpygui as dpg
 import xml.etree.ElementTree as ET
 
+VERSION = "0.1.0"
+LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF"]
 USER_DIAG_TEXTS = [f"{dt}_{i:02d}" for dt in DIAG_TYPES for i in range(64)]
 
 class App:
     def __init__(self):
+        self.clear()
+
+    def clear(self):
         self._keep_alive = True
         self.instances = {} # Dict with loaded AOI instances
         self.AOIs = {}      # Dict with loaded AOI definitions
@@ -16,11 +21,13 @@ class App:
     def exit_app(self, sender):
         self._keep_alive = False
     
-    def select_file(self, sender):
-        fs = dpg.add_file_dialog(directory_selector=False, show=True, 
-                                 tag="file_dialog_id", width=700 ,height=400,
-                                 callback=self.load)
-        dpg.add_file_extension(extension=".L5X,.l5x", parent=fs)
+    def select_load_file(self, sender):
+        with dpg.file_dialog(directory_selector=False, show=True, width=700 ,height=400, callback=self.load_callback):
+            dpg.add_file_extension(extension=".L5X,.l5x")    
+
+    def select_save_file(self, sender):
+        with dpg.file_dialog(directory_selector=False, show=True, width=700 ,height=400, callback=self.save_callback):
+            dpg.add_file_extension(extension=".L5X,.l5x")
     
     def node_selected(self, sender):  
         # Unselect other instances and select actual
@@ -50,19 +57,32 @@ class App:
         diag_local = self.get_instance_diagnostics(self.instances[ins_name]["XML_node"])
         # Populate table
         for diag, texts_aoi in diag_aoi.items():
-            for lan, text_aoi in texts_aoi.items():
+            lans = list(texts_aoi.keys())
+            if diag in diag_local:
+                lans += list(diag_local[diag].keys())
+            lans = set(lans)
+            for lan in lans:
                 with dpg.table_row(parent="diag_table") as row:
                     dpg.add_text(diag)
                     dpg.add_text(lan)
                     text_local = diag_local[diag][lan] if diag in diag_local else ""
                     dpg.add_text(text_local)
+                    text_aoi = texts_aoi.get(lan, "")
                     dpg.add_text(text_aoi) 
                     color = [255,255,255,255]
-                    if text_local != text_aoi:
+                    if lan not in LANGUAGES:
+                        # Language not supported
+                        color = [128,0,128,255]
+                    elif text_local != text_aoi:
+                        # Text is going to be replaced with AOI text
                         if text_local == "":
                             color = [255,165,0,255]
-                        elif text_aoi not in USER_DIAG_TEXTS or text_local[:2] != text_aoi[:2]:
+                        # Not allowed diagnostic text, will be overwritten
+                        elif text_aoi in ["DO NOT USE", "ANVÄND EJ"]:
                             color = [200,0,0,255]
+                        # User defined text that differs from AOI type
+                        elif text_aoi in USER_DIAG_TEXTS and text_local[:2] != text_aoi[:2]:
+                            color = [255,255,0,255]
                     with dpg.theme() as theme_id:
                         with dpg.theme_component(0):
                             dpg.add_theme_color(dpg.mvThemeCol_Text, color, category=dpg.mvThemeCat_Core)
@@ -83,12 +103,11 @@ class App:
                     if AOI_diag_word.lower() in DIAGNOSTIC_WORDS:
                         for comment in param.find("Comments"):
                             operand = comment.attrib.get("Operand")
-                            texts = {}
+                            texts = {lan: "" for lan in LANGUAGES}
                             for loc_comm in comment.findall("LocalizedComment"):
                                 lan = loc_comm.attrib.get("Lang")
                                 text = loc_comm.text.replace("\n", "")
-                                if lan in ["en-GB", "sv-SE"]:   
-                                    texts[lan] = text             
+                                texts[lan] = text             
                             res[AOI_name][f"{AOI_diag_word.lower()}{operand}"] = texts
         return res
 
@@ -111,12 +130,11 @@ class App:
             for comment in comments.findall("Comment"):
                 diag = comment.attrib.get("Operand").lower()[1:]
                 if any(word in diag for word in DIAGNOSTIC_WORDS):
-                    texts = {"en-GB": "", "sv-SE": ""}
+                    texts = {lan: "" for lan in LANGUAGES}
                     for loc_comm in comment.findall("LocalizedComment"):
                         lan = loc_comm.attrib.get("Lang")
                         text = loc_comm.text.replace("\n", "")
-                        if lan in ["en-GB", "sv-SE"]:   
-                            texts[lan] = text             
+                        texts[lan] = text             
                     res[diag] = texts
         return res  
 
@@ -138,19 +156,34 @@ class App:
         dpg.set_item_width("right_panel", new_width)
         self.update_layout()
 
-    def load(self, sender, file_data):
+    def load_callback(self, sender, file_data):
         file_path = file_data['file_path_name']
         try:
-            tree = ET.parse(file_path)
-            xml_root = tree.getroot()
+            self.clear()
+            self.tree = ET.parse(file_path)
+            xml_root = self.tree.getroot()
             self.AOIs = self.load_AOIs(xml_root)
             self.instances = self.load_instances(xml_root)
-            self.draw_layout()
+            dpg.delete_item(self._window, children_only=True)
+            self.create_main_menu()
+            self.create_layout()
         except Exception as e:
             print("Error loading file:", e)
             return
+    
+    def create_main_menu(self):
+        with dpg.menu_bar(parent=self._window):
+            with dpg.menu(label="Main"):
+                dpg.add_menu_item(label="Load", callback=self.select_load_file)
+                dpg.add_menu_item(label="Save", callback=self.select_save_file)
+                dpg.add_separator()
+                dpg.add_menu_item(label="Exit", callback=self.exit_app)
+            with dpg.menu(label="Help"):
+                dpg.add_menu_item(label="Help")
+                dpg.add_separator()
+                dpg.add_menu_item(label="About", callback=self.test)
 
-    def draw_layout(self):
+    def create_layout(self):
         with dpg.group(horizontal=True, parent=self._window):
             # INSTANCE PANEL
             with dpg.child_window(tag="left_panel", width=200, border=True):
@@ -165,11 +198,10 @@ class App:
                 # Button bar above the diagnostics table
                 with dpg.group(horizontal=True):
                     dpg.add_button(label="Fix", callback=self.fix_diagnostics)
-                    dpg.add_button(label="Save", callback=self.save_diagnostics)
                 with dpg.table(tag="diag_table", header_row=True, resizable=True, borders_innerH=True, borders_innerV=True, policy=dpg.mvTable_SizingStretchProp):
                     dpg.add_table_column(label="Diagnostic")
                     dpg.add_table_column(label="Language")
-                    dpg.add_table_column(label="Local Description")
+                    dpg.add_table_column(label="Instance Description")
                     dpg.add_table_column(label="AOI Description")
             # SPLITTER BAR 2
             dpg.add_drag_float(label="", width=10, default_value=0, min_value=-500, max_value=500, callback=self.resize_right)
@@ -185,17 +217,9 @@ class App:
         # WINDOW
         self._window = dpg.add_window(tag="Primary Window", label="Example Window")
         # MAIN MENU
-        with dpg.menu_bar(parent=self._window):
-            with dpg.menu(label="Main"):
-                dpg.add_menu_item(label="Load", callback=self.select_file)
-                dpg.add_menu_item(label="Save")
-                dpg.add_separator()
-                dpg.add_menu_item(label="Exit", callback=self.exit_app)
-            with dpg.menu(label="Help"):
-                dpg.add_menu_item(label="Help")
-                dpg.add_separator()
-                dpg.add_menu_item(label="About", callback=self.test)
-        dpg.create_viewport(title='Simumatik Co-Sim', width=800, height=640)
+        self.create_main_menu()
+        # VIEWPORT
+        dpg.create_viewport(title=f'MCP Diagnostics Tool - v{VERSION}', width=800, height=640)
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("Primary Window", True)
@@ -206,18 +230,53 @@ class App:
             dpg.render_dearpygui_frame()
         dpg.destroy_context()
         
-    def save_callback(self, sender):
-        print("Save Clicked")
+    def save_callback(self, sender, file_data):
+        file_path = file_data['file_path_name']
+        try:
+            self.tree.write(file_path, encoding="utf-8", xml_declaration=True)
+        except Exception as e:
+            print("Error saving file:", e)
+            return
 
     def fix_diagnostics(self, sender):
         """Refresh diagnostics for the currently selected instance."""
-        pass
-
-    def save_diagnostics(self, sender):
-        """Placeholder: export diagnostics (not fully implemented)."""
-        # Simple placeholder — extend to export table rows to CSV if desired
-        pass
-
+        # AOI Diagnostics
+        diag_aoi = self.AOIs[self.instances[self.current_instance]["datatype"]]
+        # Local Diagnostics in XML
+        xml_node = self.instances[self.current_instance]["XML_node"]
+        # Create comments node if not existing
+        comments = xml_node.find("Comments")
+        if comments is None:
+            comments = ET.SubElement(xml_node, "Comments")
+        # Copy AOI diagnostics to instance
+        for diag, texts_aoi in diag_aoi.items():
+            for comment in comments.findall("Comment"):
+                # Diag exists
+                if comment.attrib.get("Operand").lower()[1:] == diag:
+                    # Remove not allowed languages
+                    for loc in comment.findall("LocalizedComment"):
+                        if loc.attrib.get("Lang") not in LANGUAGES:
+                            comment.remove(loc)
+                    # Allowed language, check if needs update
+                    for lan, text_aoi in texts_aoi.items():
+                        for loc in comment.findall("LocalizedComment"):
+                            if loc.attrib.get("Lang") == lan:
+                                # Overwrite not allowed diagnostic text only
+                                if text_aoi in ["DO NOT USE", "ANVÄND EJ"]:
+                                    loc.text = text_aoi
+                                break
+                        else:
+                            # Language missing, create it
+                            ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text_aoi
+                    break
+            else:
+                # Diag does not exist, create it
+                comment = ET.SubElement(comments, "Comment", {"Operand": f".{diag}"})
+                for lan, text_aoi in texts_aoi.items():
+                    ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text_aoi
+        # Refresh displayed diagnostics
+        self.clear_diagnostics()
+        self.display_diagnostics(self.current_instance)
 
     # callback runs when user attempts to connect attributes
     def link_callback(self, sender, app_data):

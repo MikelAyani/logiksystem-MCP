@@ -1,4 +1,5 @@
 *.csv
-*.l5X
+*.l5x
+*.L5X
 *.pyc
 data/.
