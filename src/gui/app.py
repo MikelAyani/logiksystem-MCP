@@ -17,6 +17,8 @@ class App:
         self.instances = {} # Dict with loaded AOI instances
         self.AOIs = {}      # Dict with loaded AOI definitions
         self.current_instance = None
+        self.editing = False
+        self.edit_inputs = {}
 
     def exit_app(self, sender):
         self._keep_alive = False
@@ -36,6 +38,9 @@ class App:
             for child in children:
                 dpg.set_value(child, False)
         dpg.set_value(sender, True)
+        # If editing, cancel first
+        if self.editing:
+            self.cancel_edits(None)
         # Display corresponding diagnostics and remember selection
         self.clear_diagnostics()
         for ins_name, ins_data in self.instances.items():
@@ -51,6 +56,8 @@ class App:
                 dpg.delete_item(child)
     
     def display_diagnostics(self, ins_name):
+        if self.editing:
+            self.edit_inputs = {}
         # AOI Diagnostics
         diag_aoi = self.AOIs[self.instances[ins_name]["datatype"]].copy()
         # Local Diagnostics
@@ -66,7 +73,12 @@ class App:
                     dpg.add_text(diag)
                     dpg.add_text(lan)
                     text_local = diag_local[diag][lan] if diag in diag_local else ""
-                    dpg.add_text(text_local)
+                    if self.editing:
+                        input_tag = f"input_{diag}_{lan}"
+                        dpg.add_input_text(default_value=text_local, tag=input_tag)
+                        self.edit_inputs[(diag, lan)] = input_tag
+                    else:
+                        dpg.add_text(text_local)
                     text_aoi = texts_aoi.get(lan, "")
                     dpg.add_text(text_aoi) 
                     color = [255,255,255,255]
@@ -87,6 +99,74 @@ class App:
                         with dpg.theme_component(0):
                             dpg.add_theme_color(dpg.mvThemeCol_Text, color, category=dpg.mvThemeCat_Core)
                         dpg.bind_item_theme(row, theme_id)
+
+    def edit_diagnostics(self, sender):
+        self.editing = True
+        dpg.configure_item("edit_button", show=False)
+        dpg.configure_item("save_button", show=True)
+        dpg.configure_item("cancel_button", show=True)
+        dpg.configure_item("copy_button", show=True)
+        dpg.configure_item("paste_button", show=True)
+        self.clear_diagnostics()
+        self.display_diagnostics(self.current_instance)
+
+    def save_edits(self, sender):
+        diag_local = {}
+        for (diag, lan), tag in self.edit_inputs.items():
+            text = dpg.get_value(tag)
+            if diag not in diag_local:
+                diag_local[diag] = {}
+            diag_local[diag][lan] = text
+        # Update XML
+        xml_node = self.instances[self.current_instance]["XML_node"]
+        comments = xml_node.find("Comments")
+        if comments is None:
+            comments = ET.SubElement(xml_node, "Comments")
+        for diag, texts in diag_local.items():
+            for comment in comments.findall("Comment"):
+                if comment.attrib.get("Operand").lower()[1:] == diag:
+                    for lan, text in texts.items():
+                        for loc in comment.findall("LocalizedComment"):
+                            if loc.attrib.get("Lang") == lan:
+                                loc.text = text
+                                break
+                        else:
+                            ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text
+                    break
+            else:
+                comment = ET.SubElement(comments, "Comment", {"Operand": f".{diag}"})
+                for lan, text in texts.items():
+                    ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text
+        self.editing = False
+        dpg.configure_item("edit_button", show=True)
+        dpg.configure_item("save_button", show=False)
+        dpg.configure_item("cancel_button", show=False)
+        dpg.configure_item("copy_button", show=False)
+        dpg.configure_item("paste_button", show=False)
+        self.clear_diagnostics()
+        self.display_diagnostics(self.current_instance)
+
+    def cancel_edits(self, sender):
+        self.editing = False
+        dpg.configure_item("edit_button", show=True)
+        dpg.configure_item("save_button", show=False)
+        dpg.configure_item("cancel_button", show=False)
+        dpg.configure_item("copy_button", show=False)
+        dpg.configure_item("paste_button", show=False)
+        self.clear_diagnostics()
+        self.display_diagnostics(self.current_instance)
+
+    def copy_column(self, sender):
+        texts = [dpg.get_value(tag) for tag in self.edit_inputs.values()]
+        clipboard_text = '\n'.join(texts)
+        dpg.set_clipboard_text(clipboard_text)
+
+    def paste_column(self, sender):
+        clipboard_text = dpg.get_clipboard_text()
+        lines = clipboard_text.split('\n')
+        for i, tag in enumerate(self.edit_inputs.values()):
+            if i < len(lines):
+                dpg.set_value(tag, lines[i])
 
     def load_AOIs(self, xml_root):
         res = {}
@@ -196,8 +276,13 @@ class App:
             # CENTRAL PANEL
             with dpg.child_window(tag="center_panel", border=True):
                 # Button bar above the diagnostics table
-                with dpg.group(horizontal=True):
-                    dpg.add_button(label="Fix", callback=self.fix_diagnostics)
+                with dpg.group(horizontal=True, tag="button_group"):
+                    dpg.add_button(label="Fix", callback=self.fix_diagnostics, tag="fix_button")
+                    dpg.add_button(label="Edit", callback=self.edit_diagnostics, tag="edit_button")
+                    dpg.add_button(label="Save", callback=self.save_edits, tag="save_button", show=False)
+                    dpg.add_button(label="Cancel", callback=self.cancel_edits, tag="cancel_button", show=False)
+                    dpg.add_button(label="Copy Column", callback=self.copy_column, tag="copy_button", show=False)
+                    dpg.add_button(label="Paste Column", callback=self.paste_column, tag="paste_button", show=False)
                 with dpg.table(tag="diag_table", header_row=True, resizable=True, borders_innerH=True, borders_innerV=True, policy=dpg.mvTable_SizingStretchProp):
                     dpg.add_table_column(label="Diagnostic")
                     dpg.add_table_column(label="Language")
