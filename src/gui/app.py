@@ -107,6 +107,7 @@ class App:
         dpg.configure_item("cancel_button", show=True)
         dpg.configure_item("copy_button", show=True)
         dpg.configure_item("paste_button", show=True)
+        dpg.configure_item("replace_button", show=True)
         self.clear_diagnostics()
         self.display_diagnostics(self.current_instance)
 
@@ -143,6 +144,7 @@ class App:
         dpg.configure_item("cancel_button", show=False)
         dpg.configure_item("copy_button", show=False)
         dpg.configure_item("paste_button", show=False)
+        dpg.configure_item("replace_button", show=False)
         self.clear_diagnostics()
         self.display_diagnostics(self.current_instance)
 
@@ -153,6 +155,7 @@ class App:
         dpg.configure_item("cancel_button", show=False)
         dpg.configure_item("copy_button", show=False)
         dpg.configure_item("paste_button", show=False)
+        dpg.configure_item("replace_button", show=False)
         self.clear_diagnostics()
         self.display_diagnostics(self.current_instance)
 
@@ -167,6 +170,28 @@ class App:
         for i, tag in enumerate(self.edit_inputs.values()):
             if i < len(lines):
                 dpg.set_value(tag, lines[i])
+
+    def show_replace_popup(self, sender):
+        with dpg.window(label="Replace Text", modal=True, tag="replace_popup", width=400, height=200):
+            dpg.add_text("Find:")
+            dpg.add_input_text(tag="find_input", width=350)
+            dpg.add_text("Replace:")
+            dpg.add_input_text(tag="replace_input", width=350)
+            with dpg.group(horizontal=True):
+                dpg.add_button(label="Cancel", callback=self.cancel_replace)
+                dpg.add_button(label="Run", callback=self.run_replace)
+
+    def cancel_replace(self, sender):
+        dpg.delete_item("replace_popup")
+
+    def run_replace(self, sender):
+        find_text = dpg.get_value("find_input")
+        replace_text = dpg.get_value("replace_input")
+        for tag in self.edit_inputs.values():
+            current_value = dpg.get_value(tag)
+            new_value = current_value.replace(find_text, replace_text)
+            dpg.set_value(tag, new_value)
+        dpg.delete_item("replace_popup")
 
     def load_AOIs(self, xml_root):
         res = {}
@@ -219,10 +244,10 @@ class App:
         return res  
 
     def update_layout(self):
-        # Get total window content width
-        window_width = dpg.get_item_width(self._window)
+        # Get total viewport width
+        viewport_width = dpg.get_viewport_width()
         # Calculate remaining space for center
-        center_width = window_width - dpg.get_item_width("left_panel") - dpg.get_item_width("right_panel") - 40
+        center_width = viewport_width - dpg.get_item_width("left_panel") - dpg.get_item_width("right_panel") - 40
         center_width = max(center_width, 100)
         dpg.set_item_width("center_panel", center_width)
 
@@ -283,6 +308,7 @@ class App:
                     dpg.add_button(label="Cancel", callback=self.cancel_edits, tag="cancel_button", show=False)
                     dpg.add_button(label="Copy Column", callback=self.copy_column, tag="copy_button", show=False)
                     dpg.add_button(label="Paste Column", callback=self.paste_column, tag="paste_button", show=False)
+                    dpg.add_button(label="Replace", callback=self.show_replace_popup, tag="replace_button", show=False)
                 with dpg.table(tag="diag_table", header_row=True, resizable=True, borders_innerH=True, borders_innerV=True, policy=dpg.mvTable_SizingStretchProp):
                     dpg.add_table_column(label="Diagnostic")
                     dpg.add_table_column(label="Language")
@@ -307,6 +333,7 @@ class App:
         dpg.create_viewport(title=f'MCP Diagnostics Tool - v{VERSION}', width=800, height=640)
         dpg.setup_dearpygui()
         dpg.show_viewport()
+        dpg.set_viewport_resize_callback(self.update_layout)
         dpg.set_primary_window("Primary Window", True)
         # below replaces, start_dearpygui()
         while dpg.is_dearpygui_running() and self._keep_alive:
