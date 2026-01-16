@@ -244,12 +244,15 @@ class App:
         return res  
 
     def update_layout(self):
-        # Get total viewport width
-        viewport_width = dpg.get_viewport_width()
-        # Calculate remaining space for center
-        center_width = viewport_width - dpg.get_item_width("left_panel") - dpg.get_item_width("right_panel") - 40
-        center_width = max(center_width, 100)
-        dpg.set_item_width("center_panel", center_width)
+        try:
+            # Get total viewport width
+            viewport_width = dpg.get_viewport_width()
+            # Calculate remaining space for center
+            center_width = viewport_width - dpg.get_item_width("left_panel") - dpg.get_item_width("right_panel") - 40
+            center_width = max(center_width, 100)
+            dpg.set_item_width("center_panel", center_width)
+        except Exception as e:
+            pass
 
     def resize_left(self, sender, app_data, user_data):
         new_width = max(80, 200 + app_data)
