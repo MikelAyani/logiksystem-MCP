@@ -2,7 +2,7 @@
 import dearpygui.dearpygui as dpg
 import xml.etree.ElementTree as ET
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF"]
@@ -86,11 +86,14 @@ class App:
                         # Language not supported
                         color = [128,0,128,255]
                     elif text_local != text_aoi:
-                        # Text is going to be replaced with AOI text
+                        # Empty text. Text is going to be replaced with AOI text
                         if text_local == "":
                             color = [255,165,0,255]
                         # Not allowed diagnostic text, will be overwritten
                         elif text_aoi in ["DO NOT USE", "ANVÄND EJ"]:
+                            color = [200,0,0,255]
+                        # User defined text in AOI specific bit
+                        elif text_aoi[:2] not in DIAG_TYPES:
                             color = [200,0,0,255]
                         # User defined text that differs from AOI type
                         elif text_aoi in USER_DIAG_TEXTS and text_local[:2] != text_aoi[:2]:
@@ -377,7 +380,7 @@ class App:
                         for loc in comment.findall("LocalizedComment"):
                             if loc.attrib.get("Lang") == lan:
                                 # Overwrite not allowed diagnostic text only
-                                if text_aoi in ["DO NOT USE", "ANVÄND EJ"]:
+                                if text_aoi in ["DO NOT USE", "ANVÄND EJ"] or text_aoi[:2] not in DIAG_TYPES:
                                     loc.text = text_aoi
                                 break
                         else:
