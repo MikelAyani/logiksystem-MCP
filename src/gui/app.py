@@ -2,15 +2,17 @@
 import dearpygui.dearpygui as dpg
 import xml.etree.ElementTree as ET
 
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
-DIAG_TYPES = ["UF", "UW", "UM", "SF"]
+DIAG_TYPES = ["UF", "UW", "UM", "SF", "SW", "SM"]
 USER_DIAG_TEXTS = [f"{dt}_{i:02d}" for dt in DIAG_TYPES for i in range(64)]
 COLOR_WHITE = [255,255,255,255]
 COLOR_RED = [200,0,0,255]
 COLOR_ORANGE = [255,165,0,255]
 COLOR_PURPLE = [128,0,128,255]
+STATUS_OK = "OK"
+STATUS_ISSUE = "ISSUE"
 
 class App:
     def __init__(self):
@@ -19,6 +21,7 @@ class App:
     def clear(self):
         self._keep_alive = True
         self.instances = {} # Dict with loaded AOI instances
+        self.instance_status = {} # Dict with instance diagnostic status
         self.AOIs = {}      # Dict with loaded AOI definitions
         self.current_instance = None
         self.editing = False
@@ -90,6 +93,10 @@ class App:
                     # Language not supported
                     color = COLOR_RED
                     instance_color = COLOR_RED
+                # local text includes special character combination
+                elif "<@" in text_local:
+                    color = COLOR_RED
+                    instance_color = COLOR_RED                        
                 elif text_local != text_aoi:
                     # Both language descriptions do not exist
                     if not both_lan_exist:
@@ -132,6 +139,7 @@ class App:
                         dpg.bind_item_theme(row, theme_id)
     
         # Mark Instance with color
+        self.instance_status[ins_name] = STATUS_OK if instance_color != COLOR_RED else STATUS_ISSUE
         with dpg.theme() as theme_id:
             with dpg.theme_component(0):
                 dpg.add_theme_color(dpg.mvThemeCol_Text, instance_color, category=dpg.mvThemeCat_Core)
@@ -190,7 +198,7 @@ class App:
         dpg.configure_item("edit_button", show=True)
         dpg.configure_item("save_button", show=False)
         dpg.configure_item("cancel_button", show=False)
-        dpg.configure_item("copy_table", show=False)
+        dpg.configure_item("copy_table_button", show=False)
         dpg.configure_item("copy_button", show=False)
         dpg.configure_item("paste_button", show=False)
         dpg.configure_item("replace_button", show=False)
@@ -371,6 +379,8 @@ class App:
                 dpg.add_menu_item(label="Save", callback=self.select_save_file)
                 dpg.add_separator()
                 dpg.add_menu_item(label="Exit", callback=self.exit_app)
+            with dpg.menu(label="Tools"):
+                dpg.add_menu_item(label="Fix all", callback=self.fix_all_diagnostics)
             with dpg.menu(label="Help"):
                 dpg.add_menu_item(label="Help")
                 dpg.add_separator()
@@ -480,6 +490,13 @@ class App:
                     ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text_aoi
         # Refresh displayed diagnostics
         self.display_diagnostics(self.current_instance)
+
+    def fix_all_diagnostics(self, sender):
+        """Fix diagnostics for all instances."""
+        for ins_name, status in self.instance_status.items():
+            if status == STATUS_OK:
+                self.current_instance = ins_name
+                self.fix_diagnostics(None)
 
     # callback runs when user attempts to connect attributes
     def link_callback(self, sender, app_data):
