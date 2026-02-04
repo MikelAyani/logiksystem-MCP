@@ -2,7 +2,7 @@
 import dearpygui.dearpygui as dpg
 import xml.etree.ElementTree as ET
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF"]
@@ -58,12 +58,13 @@ class App:
             for child in children:
                 dpg.delete_item(child)
     
-    def display_diagnostics(self, ins_name):
+    def display_diagnostics(self, ins_name, show_table=True):
         self.clear_diagnostics()
         if self.editing:
             self.edit_inputs = {}
         # AOI Diagnostics
         diag_aoi = self.AOIs[self.instances[ins_name]["datatype"]].copy()
+        diag_aoi.pop("Revision", None)
         # Local Diagnostics
         diag_local = self.get_instance_diagnostics(self.instances[ins_name]["XML_node"])
         # Instance color
@@ -82,49 +83,54 @@ class App:
                         lan_desc_count += 1
             both_lan_exist = (lan_desc_count == len(lans)) or (lan_desc_count == 0)
             for lan in lans:
-                with dpg.table_row(parent="diag_table") as row:
-                    dpg.add_text(diag)
-                    dpg.add_text(lan)
-                    text_local = diag_local[diag][lan] if diag in diag_local else ""
-                    if self.editing:
-                        input_tag = f"input_{diag}_{lan}"
-                        dpg.add_input_text(default_value=text_local, tag=input_tag)
-                        self.edit_inputs[(diag, lan)] = input_tag
-                    else:
-                        dpg.add_text(text_local)
-                    text_aoi = texts_aoi.get(lan, "")
-                    dpg.add_text(text_aoi) 
-                    color = COLOR_WHITE
-                    if lan not in LANGUAGES:
-                        # Language not supported
+                text_local = diag_local[diag][lan] if diag in diag_local else ""
+                text_aoi = texts_aoi.get(lan, "")
+                color = COLOR_WHITE
+                if lan not in LANGUAGES:
+                    # Language not supported
+                    color = COLOR_RED
+                    instance_color = COLOR_RED
+                elif text_local != text_aoi:
+                    # Both language descriptions do not exist
+                    if not both_lan_exist:
                         color = COLOR_RED
                         instance_color = COLOR_RED
-                    elif text_local != text_aoi:
-                        # Both language descriptions do not exist
-                        if not both_lan_exist:
-                            color = COLOR_RED
-                            instance_color = COLOR_RED
-                        # Empty text. Text is going to be replaced with AOI text
-                        elif text_local == "":
-                            color = COLOR_ORANGE
-                            instance_color = COLOR_ORANGE if instance_color != COLOR_RED else instance_color
-                        # Not allowed diagnostic text, will be overwritten
-                        elif text_aoi in ["DO NOT USE", "ANVÄND EJ"]:
-                            color = COLOR_RED
-                            instance_color = COLOR_RED
-                        # User defined text in AOI specific bit
-                        elif text_aoi[:2] not in DIAG_TYPES:
-                            color = COLOR_RED
-                            instance_color = COLOR_RED
-                        # User defined text that differs from AOI type
-                        elif text_aoi in USER_DIAG_TEXTS and text_local[:2] != text_aoi[:2]:
-                            color = COLOR_RED
-                            instance_color = COLOR_RED
+                    # Empty text. Text is going to be replaced with AOI text
+                    elif text_local == "":
+                        color = COLOR_ORANGE
+                        instance_color = COLOR_ORANGE if instance_color != COLOR_RED else instance_color
+                    # Not allowed diagnostic text, will be overwritten
+                    elif text_aoi in ["DO NOT USE", "ANVÄND EJ"]:
+                        color = COLOR_RED
+                        instance_color = COLOR_RED
+                    # User defined text in AOI specific bit
+                    elif text_aoi[:2] not in DIAG_TYPES:
+                        color = COLOR_RED
+                        instance_color = COLOR_RED
+                    # User defined text that differs from AOI type
+                    elif text_aoi in USER_DIAG_TEXTS and text_local[:2] != text_aoi[:2]:
+                        color = COLOR_RED
+                        instance_color = COLOR_RED
+                if show_table:
+                    with dpg.table_row(parent="diag_table") as row:
+                        dpg.add_text(diag)
+                        dpg.add_text(lan)
+                        if self.editing:
+                            input_tag = f"input_{diag}_{lan}"
+                            input_widget = dpg.add_input_text(default_value=text_local, tag=input_tag)
+                            with dpg.popup(input_widget, mousebutton=dpg.mvMouseButton_Right, modal=False):
+                                dpg.add_menu_item(label="Copy", callback=self.copy_text, user_data=input_tag)
+                                dpg.add_menu_item(label="Paste", callback=self.paste_text, user_data=input_tag)
+                                dpg.add_menu_item(label="Cut", callback=self.cut_text, user_data=input_tag)
+                            self.edit_inputs[(diag, lan)] = input_tag
+                        else:
+                            dpg.add_text(text_local)
+                        dpg.add_text(text_aoi) 
                     with dpg.theme() as theme_id:
                         with dpg.theme_component(0):
                             dpg.add_theme_color(dpg.mvThemeCol_Text, color, category=dpg.mvThemeCat_Core)
                         dpg.bind_item_theme(row, theme_id)
-        
+    
         # Mark Instance with color
         with dpg.theme() as theme_id:
             with dpg.theme_component(0):
@@ -136,6 +142,7 @@ class App:
         dpg.configure_item("edit_button", show=False)
         dpg.configure_item("save_button", show=True)
         dpg.configure_item("cancel_button", show=True)
+        dpg.configure_item("copy_table_button", show=True)
         dpg.configure_item("copy_button", show=True)
         dpg.configure_item("paste_button", show=True)
         dpg.configure_item("replace_button", show=True)
@@ -172,6 +179,7 @@ class App:
         dpg.configure_item("edit_button", show=True)
         dpg.configure_item("save_button", show=False)
         dpg.configure_item("cancel_button", show=False)
+        dpg.configure_item("copy_table_button", show=False)
         dpg.configure_item("copy_button", show=False)
         dpg.configure_item("paste_button", show=False)
         dpg.configure_item("replace_button", show=False)
@@ -182,6 +190,7 @@ class App:
         dpg.configure_item("edit_button", show=True)
         dpg.configure_item("save_button", show=False)
         dpg.configure_item("cancel_button", show=False)
+        dpg.configure_item("copy_table", show=False)
         dpg.configure_item("copy_button", show=False)
         dpg.configure_item("paste_button", show=False)
         dpg.configure_item("replace_button", show=False)
@@ -190,6 +199,49 @@ class App:
     def copy_column(self, sender):
         texts = [dpg.get_value(tag) for tag in self.edit_inputs.values()]
         clipboard_text = '\n'.join(texts)
+        dpg.set_clipboard_text(clipboard_text)
+
+    def copy_text(self, sender, app_data, user_data):
+        """Copy text from input field to clipboard."""
+        text = dpg.get_value(user_data)
+        dpg.set_clipboard_text(text)
+
+    def paste_text(self, sender, app_data, user_data):
+        """Paste text from clipboard to input field."""
+        clipboard_text = dpg.get_clipboard_text()
+        if clipboard_text:
+            dpg.set_value(user_data, clipboard_text)
+
+    def cut_text(self, sender, app_data, user_data):
+        """Cut text from input field to clipboard."""
+        text = dpg.get_value(user_data)
+        dpg.set_clipboard_text(text)
+        dpg.set_value(user_data, "")
+
+    def copy_table(self, sender):
+        """Copy the entire diagnostics table to clipboard as tab-separated values."""
+        table_data = []
+        # Get all table rows
+        children = dpg.get_item_children("diag_table", 1)  # 1 = slot for items (rows)
+        if children:
+            for row in children:
+                row_data = []
+                # Get children of the row (the cells)
+                row_children = dpg.get_item_children(row, 1)
+                if row_children:
+                    for cell in row_children:
+                        # Get the text value from each cell
+                        if dpg.get_item_type(cell) == "mvAppItemType::mvText":
+                            text = dpg.get_value(cell)
+                        elif dpg.get_item_type(cell) == "mvAppItemType::mvInputText":
+                            text = dpg.get_value(cell)
+                        else:
+                            text = ""
+                        row_data.append(text)
+                table_data.append("\t".join(row_data))
+        
+        # Join all rows with newlines
+        clipboard_text = "\n".join(table_data)
         dpg.set_clipboard_text(clipboard_text)
 
     def paste_column(self, sender):
@@ -226,9 +278,10 @@ class App:
         AOI_elements = xml_root.iter("AddOnInstructionDefinition")
         for elem in AOI_elements:
             AOI_name = elem.attrib.get("Name")
+            AOI_rev = elem.attrib.get("Revision")
             for param in elem.find("Parameters"):
                 if param.attrib.get("Name") == "cDeviceID" and AOI_name != "MCP_Device":
-                    res[AOI_name] = {}
+                    res[AOI_name] = {"Revision": AOI_rev}
                     break
             if AOI_name in res:
                 for param in elem.find("Parameters"): 
@@ -304,10 +357,9 @@ class App:
             self.create_main_menu()
             self.create_layout()
             # Pre-load diagnostics
-            children = dpg.get_item_children("Instances", 1)  # 1 = slot for items
-            if children:
-                for child in children:
-                    self.node_selected(child)
+            # Display corresponding diagnostics and remember selection
+            for ins_name in self.instances.keys():
+                self.display_diagnostics(ins_name, False)
         except Exception as e:
             print("Error loading file:", e)
             return
@@ -342,21 +394,24 @@ class App:
                     dpg.add_button(label="Edit", callback=self.edit_diagnostics, tag="edit_button")
                     dpg.add_button(label="Save", callback=self.save_edits, tag="save_button", show=False)
                     dpg.add_button(label="Cancel", callback=self.cancel_edits, tag="cancel_button", show=False)
+                    dpg.add_button(label="Copy Table", callback=self.copy_table, tag="copy_table_button", show=False)
                     dpg.add_button(label="Copy Column", callback=self.copy_column, tag="copy_button", show=False)
                     dpg.add_button(label="Paste Column", callback=self.paste_column, tag="paste_button", show=False)
                     dpg.add_button(label="Replace", callback=self.show_replace_popup, tag="replace_button", show=False)
-                with dpg.table(tag="diag_table", header_row=True, resizable=True, borders_innerH=True, borders_innerV=True, policy=dpg.mvTable_SizingStretchProp):
-                    dpg.add_table_column(label="Diagnostic")
-                    dpg.add_table_column(label="Language")
-                    dpg.add_table_column(label="Instance Description")
-                    dpg.add_table_column(label="AOI Description")
+                # Scrollable area for the table
+                with dpg.child_window(tag="table_scroll_area", height=-1, border=False):
+                    with dpg.table(tag="diag_table", header_row=True, resizable=True, borders_innerH=True, borders_innerV=True, policy=dpg.mvTable_SizingStretchProp, freeze_rows=1):
+                        dpg.add_table_column(label="Diagnostic")
+                        dpg.add_table_column(label="Language")
+                        dpg.add_table_column(label="Instance Description")
+                        dpg.add_table_column(label="AOI Description")
             # SPLITTER BAR 2
             dpg.add_drag_float(label="", width=10, default_value=0, min_value=-500, max_value=500, callback=self.resize_right)
             # AOI PANEL
             with dpg.child_window(tag="right_panel", width=200, border=True):
                 with dpg.tree_node(label="AOIs", default_open=True):
                     for aoi in self.AOIs.keys():
-                        dpg.add_text(aoi) 
+                        dpg.add_text(f"{aoi} (v{self.AOIs[aoi]['Revision']})") 
         self.update_layout()
 
     def run(self):
@@ -390,6 +445,7 @@ class App:
         """Refresh diagnostics for the currently selected instance."""
         # AOI Diagnostics
         diag_aoi = self.AOIs[self.instances[self.current_instance]["datatype"]]
+        diag_aoi.pop("Revision", None)
         # Local Diagnostics in XML
         xml_node = self.instances[self.current_instance]["XML_node"]
         # Create comments node if not existing
@@ -410,7 +466,7 @@ class App:
                         for loc in comment.findall("LocalizedComment"):
                             if loc.attrib.get("Lang") == lan:
                                 # Overwrite not allowed diagnostic text only
-                                if text_aoi in ["DO NOT USE", "ANVÄND EJ"] or text_aoi[:2] not in DIAG_TYPES:
+                                if text_aoi in ["DO NOT USE", "ANVÄND EJ"] or text_aoi[:2] not in DIAG_TYPES or loc.text == "":
                                     loc.text = text_aoi
                                 break
                         else:
