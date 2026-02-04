@@ -2,11 +2,15 @@
 import dearpygui.dearpygui as dpg
 import xml.etree.ElementTree as ET
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF"]
 USER_DIAG_TEXTS = [f"{dt}_{i:02d}" for dt in DIAG_TYPES for i in range(64)]
+COLOR_WHITE = [255,255,255,255]
+COLOR_RED = [200,0,0,255]
+COLOR_ORANGE = [255,165,0,255]
+COLOR_PURPLE = [128,0,128,255]
 
 class App:
     def __init__(self):
@@ -42,7 +46,6 @@ class App:
         if self.editing:
             self.cancel_edits(None)
         # Display corresponding diagnostics and remember selection
-        self.clear_diagnostics()
         for ins_name, ins_data in self.instances.items():
             if ins_data["tree_node"] == sender:
                 self.current_instance = ins_name
@@ -56,18 +59,28 @@ class App:
                 dpg.delete_item(child)
     
     def display_diagnostics(self, ins_name):
+        self.clear_diagnostics()
         if self.editing:
             self.edit_inputs = {}
         # AOI Diagnostics
         diag_aoi = self.AOIs[self.instances[ins_name]["datatype"]].copy()
         # Local Diagnostics
         diag_local = self.get_instance_diagnostics(self.instances[ins_name]["XML_node"])
+        # Instance color
+        instance_color = COLOR_WHITE
         # Populate table
         for diag, texts_aoi in diag_aoi.items():
             lans = list(texts_aoi.keys())
             if diag in diag_local:
                 lans += list(diag_local[diag].keys())
             lans = set(lans)
+            # Check if language description is consistent
+            lan_desc_count = 0
+            for lan in lans:
+                if diag in diag_local:
+                    if (diag_local[diag][lan] != texts_aoi.get(lan, "")) and (diag_local[diag][lan] != ""):
+                        lan_desc_count += 1
+            both_lan_exist = (lan_desc_count == len(lans)) or (lan_desc_count == 0)
             for lan in lans:
                 with dpg.table_row(parent="diag_table") as row:
                     dpg.add_text(diag)
@@ -81,27 +94,42 @@ class App:
                         dpg.add_text(text_local)
                     text_aoi = texts_aoi.get(lan, "")
                     dpg.add_text(text_aoi) 
-                    color = [255,255,255,255]
+                    color = COLOR_WHITE
                     if lan not in LANGUAGES:
                         # Language not supported
-                        color = [128,0,128,255]
+                        color = COLOR_RED
+                        instance_color = COLOR_RED
                     elif text_local != text_aoi:
+                        # Both language descriptions do not exist
+                        if not both_lan_exist:
+                            color = COLOR_RED
+                            instance_color = COLOR_RED
                         # Empty text. Text is going to be replaced with AOI text
-                        if text_local == "":
-                            color = [255,165,0,255]
+                        elif text_local == "":
+                            color = COLOR_ORANGE
+                            instance_color = COLOR_ORANGE if instance_color != COLOR_RED else instance_color
                         # Not allowed diagnostic text, will be overwritten
                         elif text_aoi in ["DO NOT USE", "ANVÄND EJ"]:
-                            color = [200,0,0,255]
+                            color = COLOR_RED
+                            instance_color = COLOR_RED
                         # User defined text in AOI specific bit
                         elif text_aoi[:2] not in DIAG_TYPES:
-                            color = [200,0,0,255]
+                            color = COLOR_RED
+                            instance_color = COLOR_RED
                         # User defined text that differs from AOI type
                         elif text_aoi in USER_DIAG_TEXTS and text_local[:2] != text_aoi[:2]:
-                            color = [255,255,0,255]
+                            color = COLOR_RED
+                            instance_color = COLOR_RED
                     with dpg.theme() as theme_id:
                         with dpg.theme_component(0):
                             dpg.add_theme_color(dpg.mvThemeCol_Text, color, category=dpg.mvThemeCat_Core)
                         dpg.bind_item_theme(row, theme_id)
+        
+        # Mark Instance with color
+        with dpg.theme() as theme_id:
+            with dpg.theme_component(0):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, instance_color, category=dpg.mvThemeCat_Core)
+            dpg.bind_item_theme(self.instances[ins_name]["tree_node"], theme_id)                
 
     def edit_diagnostics(self, sender):
         self.editing = True
@@ -111,7 +139,6 @@ class App:
         dpg.configure_item("copy_button", show=True)
         dpg.configure_item("paste_button", show=True)
         dpg.configure_item("replace_button", show=True)
-        self.clear_diagnostics()
         self.display_diagnostics(self.current_instance)
 
     def save_edits(self, sender):
@@ -148,7 +175,6 @@ class App:
         dpg.configure_item("copy_button", show=False)
         dpg.configure_item("paste_button", show=False)
         dpg.configure_item("replace_button", show=False)
-        self.clear_diagnostics()
         self.display_diagnostics(self.current_instance)
 
     def cancel_edits(self, sender):
@@ -159,7 +185,6 @@ class App:
         dpg.configure_item("copy_button", show=False)
         dpg.configure_item("paste_button", show=False)
         dpg.configure_item("replace_button", show=False)
-        self.clear_diagnostics()
         self.display_diagnostics(self.current_instance)
 
     def copy_column(self, sender):
@@ -278,6 +303,11 @@ class App:
             dpg.delete_item(self._window, children_only=True)
             self.create_main_menu()
             self.create_layout()
+            # Pre-load diagnostics
+            children = dpg.get_item_children("Instances", 1)  # 1 = slot for items
+            if children:
+                for child in children:
+                    self.node_selected(child)
         except Exception as e:
             print("Error loading file:", e)
             return
@@ -301,7 +331,7 @@ class App:
                 with dpg.tree_node(tag="Instances", label="Instances", default_open=True):
                     for (name, value) in self.instances.items():
                         instance_node = dpg.add_selectable(label=f"{name} ({value["datatype"]})", callback=self.node_selected)
-                        self.instances[name]["tree_node"] = instance_node
+                        self.instances[name]["tree_node"] = instance_node          
             # DRAG HANDLE LEFT
             dpg.add_drag_float(label="", width=10, default_value=0, min_value=-500, max_value=500, callback=self.resize_left)
             # CENTRAL PANEL
@@ -393,7 +423,6 @@ class App:
                 for lan, text_aoi in texts_aoi.items():
                     ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text_aoi
         # Refresh displayed diagnostics
-        self.clear_diagnostics()
         self.display_diagnostics(self.current_instance)
 
     # callback runs when user attempts to connect attributes
