@@ -2,8 +2,9 @@
 import dearpygui.dearpygui as dpg
 from lxml import etree
 
-VERSION = "0.1.8"
-LANGUAGES = ["en-GB", "sv-SE"]
+VERSION = "0.1.9"
+KEY_LANGUAGE = "en-GB"
+LANGUAGES = [KEY_LANGUAGE, "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF", "SW", "SM"]
 USER_DIAG_TEXTS = [f"{dt}_{i:02d}" for dt in DIAG_TYPES for i in range(64)]
@@ -20,6 +21,7 @@ class App:
 
     def clear(self):
         self._keep_alive = True
+        self.key_language_desc = {}
         self.instances = {} # Dict with loaded AOI instances
         self.instance_status = {} # Dict with instance diagnostic status
         self.AOIs = {}      # Dict with loaded AOI definitions
@@ -372,8 +374,25 @@ class App:
             self.create_layout()
             # Pre-load diagnostics
             # Display corresponding diagnostics and remember selection
+            # Save Key language description for later use in diagnostics export
             for ins_name in self.instances.keys():
                 self.display_diagnostics(ins_name, False)
+                # Local Diagnostics in XML
+                xml_node = self.instances[ins_name]["XML_node"]
+                # Create comments node if not existing
+                comments = xml_node.find("Comments",None)
+                if comments is not None:
+                    # Copy AOI diagnostics to instance
+                    for comment in comments.findall("Comment"):
+                        diag_word = comment.attrib.get("Operand").split(".")
+                        diag_word = diag_word[1].lower()
+                        if diag_word in DIAGNOSTIC_WORDS:
+                            # Remove not allowed languages
+                            for loc in comment.findall("LocalizedComment"):
+                                if loc.attrib.get("Lang") == KEY_LANGUAGE:
+                                    key = f"{ins_name}{comment.attrib.get("Operand").replace("\n", "")}"
+                                    self.key_language_desc[key] = loc.text.replace("\n", "") 
+                       
         except Exception as e:
             print("Error loading file:", e)
             return
@@ -481,17 +500,17 @@ class App:
                     if comments is not None:
                         # Copy AOI diagnostics to instance
                         for comment in comments.findall("Comment"):
-                            diag_word = comment.attrib.get("Operand")
-                            diag_word = diag_word.split(".")
+                            diag_word = comment.attrib.get("Operand").split(".")
                             diag_word = diag_word[1].lower()
                             if diag_word in DIAGNOSTIC_WORDS:
                                 # Remove not allowed languages
                                 texts = {}
+                                key = f"{ins_name}{comment.attrib.get("Operand").replace("\n", "").upper()}"
                                 for loc in comment.findall("LocalizedComment"):
                                     if loc.attrib.get("Lang") in LANGUAGES:
                                         texts[loc.attrib.get("Lang")] = loc.text    
                                 if texts:
-                                    f.write(f"TAG\t{ins_name}{comment.attrib.get("Operand").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("sv-SE", "").replace("\n", "")}\n")
+                                    f.write(f"TAG\t{key}\t{self.key_language_desc.get(key, '')}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("sv-SE", "").replace("\n", "")}\n")
 
         except Exception as e:
             print("Error exporting diagnostics:", e)
