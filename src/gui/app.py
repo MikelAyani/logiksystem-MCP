@@ -38,6 +38,10 @@ class App:
         with dpg.file_dialog(directory_selector=False, show=True, width=700 ,height=400, callback=self.save_callback):
             dpg.add_file_extension(extension=".L5X,.l5x")
     
+    def select_export_diagnostics(self, sender):
+        with dpg.file_dialog(directory_selector=False, show=True, width=700 ,height=400, callback=self.export_callback):
+            dpg.add_file_extension(extension=".TXT,.txt")        
+    
     def node_selected(self, sender):  
         # Unselect other instances and select actual
         children = dpg.get_item_children("Instances", 1)  # 1 = slot for items
@@ -379,6 +383,7 @@ class App:
             with dpg.menu(label="Main"):
                 dpg.add_menu_item(label="Load", callback=self.select_load_file)
                 dpg.add_menu_item(label="Save", callback=self.select_save_file)
+                dpg.add_menu_item(label="Export Diag.", callback=self.select_export_diagnostics)
                 dpg.add_separator()
                 dpg.add_menu_item(label="Exit", callback=self.exit_app)
             with dpg.menu(label="Tools"):
@@ -451,6 +456,35 @@ class App:
             self.tree.write(file_path, encoding="utf-8", xml_declaration=True)
         except Exception as e:
             print("Error saving file:", e)
+            return
+    
+    def export_callback(self, sender, file_data):
+        file_path = file_data['file_path_name']
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                # Write header
+                f.write("#Logix Designer Project Documentation Localization File\n")
+                f.write("#\n")
+                f.write("TYPE	CONTEXT	KEY:en-GB [English (United Kingdom)]	en-GB [English (United Kingdom)]	sv-SE [svenska (Sverige)]\n")
+                # Write data
+                for ins_name in self.instances.keys():
+                    # Local Diagnostics in XML
+                    xml_node = self.instances[ins_name]["XML_node"]
+                    # Create comments node if not existing
+                    comments = xml_node.find("Comments",None)
+                    if comments is not None:
+                        # Copy AOI diagnostics to instance
+                        for comment in comments.findall("Comment"):
+                            # Remove not allowed languages
+                            texts = {}
+                            for loc in comment.findall("LocalizedComment"):
+                                if loc.attrib.get("Lang") in LANGUAGES:
+                                    texts[loc.attrib.get("Lang")] = loc.text    
+                            if texts:
+                                f.write(f"{ins_name}{comment.attrib.get("Operand").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("sv-SE", "").replace("\n", "")}\n")
+
+        except Exception as e:
+            print("Error exporting diagnostics:", e)
             return
 
     def fix_diagnostics(self, sender):
