@@ -1,3 +1,5 @@
 *.l5x
 *.L5X
+*.txt
+*.TXT
 *.pyc

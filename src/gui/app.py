@@ -2,7 +2,7 @@
 import dearpygui.dearpygui as dpg
 from lxml import etree
 
-VERSION = "0.1.7"
+VERSION = "0.1.8"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF", "SW", "SM"]
@@ -383,11 +383,11 @@ class App:
             with dpg.menu(label="Main"):
                 dpg.add_menu_item(label="Load", callback=self.select_load_file)
                 dpg.add_menu_item(label="Save", callback=self.select_save_file)
-                dpg.add_menu_item(label="Export Diag.", callback=self.select_export_diagnostics)
                 dpg.add_separator()
                 dpg.add_menu_item(label="Exit", callback=self.exit_app)
             with dpg.menu(label="Tools"):
                 dpg.add_menu_item(label="Fix all", callback=self.fix_all_diagnostics)
+                dpg.add_menu_item(label="Export Diag.", callback=self.select_export_diagnostics)
             with dpg.menu(label="Help"):
                 dpg.add_menu_item(label="Help")
                 dpg.add_separator()
@@ -471,7 +471,7 @@ class App:
                 f.write("#\n")
                 f.write("#** Do not modify the TYPE CONTEXT or KEY columns **\n")   
                 f.write("#\n")
-                f.write("TYPE\tCONTEXT KEY:en-GB [English (United Kingdom)]\ten-GB [English (United Kingdom)]\tsv-SE [svenska (Sverige)]\n")
+                f.write("TYPE\tCONTEXT\tKEY:en-GB [English (United Kingdom)]\ten-GB [English (United Kingdom)]\tsv-SE [svenska (Sverige)]\n")
                 # Write data
                 for ins_name in self.instances.keys():
                     # Local Diagnostics in XML
@@ -481,13 +481,17 @@ class App:
                     if comments is not None:
                         # Copy AOI diagnostics to instance
                         for comment in comments.findall("Comment"):
-                            # Remove not allowed languages
-                            texts = {}
-                            for loc in comment.findall("LocalizedComment"):
-                                if loc.attrib.get("Lang") in LANGUAGES:
-                                    texts[loc.attrib.get("Lang")] = loc.text    
-                            if texts:
-                                f.write(f"TAG\t{ins_name}{comment.attrib.get("Operand").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("sv-SE", "").replace("\n", "")}\n")
+                            diag_word = comment.attrib.get("Operand")
+                            diag_word = diag_word.split(".")
+                            diag_word = diag_word[1].lower()
+                            if diag_word in DIAGNOSTIC_WORDS:
+                                # Remove not allowed languages
+                                texts = {}
+                                for loc in comment.findall("LocalizedComment"):
+                                    if loc.attrib.get("Lang") in LANGUAGES:
+                                        texts[loc.attrib.get("Lang")] = loc.text    
+                                if texts:
+                                    f.write(f"TAG\t{ins_name}{comment.attrib.get("Operand").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("sv-SE", "").replace("\n", "")}\n")
 
         except Exception as e:
             print("Error exporting diagnostics:", e)
