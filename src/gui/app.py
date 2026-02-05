@@ -1,6 +1,6 @@
 
 import dearpygui.dearpygui as dpg
-import xml.etree.ElementTree as ET
+from lxml import etree
 
 VERSION = "0.1.4"
 LANGUAGES = ["en-GB", "sv-SE"]
@@ -167,22 +167,22 @@ class App:
         xml_node = self.instances[self.current_instance]["XML_node"]
         comments = xml_node.find("Comments")
         if comments is None:
-            comments = ET.SubElement(xml_node, "Comments")
+            comments = etree.SubElement(xml_node, "Comments")
         for diag, texts in diag_local.items():
             for comment in comments.findall("Comment"):
                 if comment.attrib.get("Operand").lower()[1:] == diag:
                     for lan, text in texts.items():
                         for loc in comment.findall("LocalizedComment"):
                             if loc.attrib.get("Lang") == lan:
-                                loc.text = text
+                                loc.text = etree.CDATA(text)
                                 break
                         else:
-                            ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text
+                            etree.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = etree.CDATA(text)
                     break
             else:
-                comment = ET.SubElement(comments, "Comment", {"Operand": f".{diag}"})
+                comment = etree.SubElement(comments, "Comment", {"Operand": f".{diag}"})
                 for lan, text in texts.items():
-                    ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text
+                    etree.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = etree.CDATA(text)
         self.editing = False
         dpg.configure_item("edit_button", show=True)
         dpg.configure_item("save_button", show=False)
@@ -357,7 +357,8 @@ class App:
         file_path = file_data['file_path_name']
         try:
             self.clear()
-            self.tree = ET.parse(file_path)
+            parser = etree.XMLParser(strip_cdata=False)
+            self.tree = etree.parse(file_path, parser)
             xml_root = self.tree.getroot()
             self.AOIs = self.load_AOIs(xml_root)
             self.instances = self.load_instances(xml_root)
@@ -461,7 +462,7 @@ class App:
         # Create comments node if not existing
         comments = xml_node.find("Comments")
         if comments is None:
-            comments = ET.SubElement(xml_node, "Comments")
+            comments = etree.SubElement(xml_node, "Comments")
         # Copy AOI diagnostics to instance
         for diag, texts_aoi in diag_aoi.items():
             for comment in comments.findall("Comment"):
@@ -477,17 +478,17 @@ class App:
                             if loc.attrib.get("Lang") == lan:
                                 # Overwrite not allowed diagnostic text only
                                 if text_aoi in ["DO NOT USE", "ANVÄND EJ"] or text_aoi[:2] not in DIAG_TYPES or loc.text == "":
-                                    loc.text = text_aoi
+                                    loc.text = etree.CDATA(text_aoi)
                                 break
                         else:
                             # Language missing, create it
-                            ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text_aoi
+                            etree.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = etree.CDATA(text_aoi)
                     break
             else:
                 # Diag does not exist, create it
-                comment = ET.SubElement(comments, "Comment", {"Operand": f".{diag}"})
+                comment = etree.SubElement(comments, "Comment", {"Operand": f".{diag}"})
                 for lan, text_aoi in texts_aoi.items():
-                    ET.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = text_aoi
+                    etree.SubElement(comment, "LocalizedComment", {"Lang": lan}).text = etree.CDATA(text_aoi)    
         # Refresh displayed diagnostics
         self.display_diagnostics(self.current_instance)
 
