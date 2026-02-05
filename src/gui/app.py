@@ -2,7 +2,7 @@
 import dearpygui.dearpygui as dpg
 from lxml import etree
 
-VERSION = "0.1.6"
+VERSION = "0.1.7"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF", "SW", "SM"]
@@ -464,6 +464,12 @@ class App:
             with open(file_path, 'w', encoding='utf-8') as f:
                 # Write header
                 f.write("#Logix Designer Project Documentation Localization File\n")
+                f.write("#Source: _Filename \n")				
+                f.write("#Date: 2026-01-01T00:00:00.0\n")
+                f.write("#Version: 1.00\n")
+                f.write("#Options: IncludeProjectContext\n")
+                f.write("#\n")
+                f.write("#** Do not modify the TYPE CONTEXT or KEY columns **\n")   
                 f.write("#\n")
                 f.write("TYPE\tCONTEXT KEY:en-GB [English (United Kingdom)]\ten-GB [English (United Kingdom)]\tsv-SE [svenska (Sverige)]\n")
                 # Write data
