@@ -2,7 +2,7 @@
 import dearpygui.dearpygui as dpg
 from lxml import etree
 
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF", "SW", "SM"]
@@ -465,7 +465,7 @@ class App:
                 # Write header
                 f.write("#Logix Designer Project Documentation Localization File\n")
                 f.write("#\n")
-                f.write("TYPE	CONTEXT	KEY:en-GB [English (United Kingdom)]	en-GB [English (United Kingdom)]	sv-SE [svenska (Sverige)]\n")
+                f.write("TYPE\tCONTEXT KEY:en-GB [English (United Kingdom)]\ten-GB [English (United Kingdom)]\tsv-SE [svenska (Sverige)]\n")
                 # Write data
                 for ins_name in self.instances.keys():
                     # Local Diagnostics in XML
@@ -481,7 +481,7 @@ class App:
                                 if loc.attrib.get("Lang") in LANGUAGES:
                                     texts[loc.attrib.get("Lang")] = loc.text    
                             if texts:
-                                f.write(f"{ins_name}{comment.attrib.get("Operand").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("sv-SE", "").replace("\n", "")}\n")
+                                f.write(f"TAG\t{ins_name}{comment.attrib.get("Operand").replace("\n", "")}\t{texts.get("en-GB", "").replace("\n", "")}\t{texts.get("sv-SE", "").replace("\n", "")}\n")
 
         except Exception as e:
             print("Error exporting diagnostics:", e)
