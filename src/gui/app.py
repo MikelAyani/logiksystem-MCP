@@ -2,7 +2,7 @@
 import dearpygui.dearpygui as dpg
 from lxml import etree
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 LANGUAGES = ["en-GB", "sv-SE"]
 DIAGNOSTIC_WORDS = ["idiagnostic1", "idiagnostic2", "idiagnostic3"]
 DIAG_TYPES = ["UF", "UW", "UM", "SF", "SW", "SM"]
@@ -167,7 +167,8 @@ class App:
         xml_node = self.instances[self.current_instance]["XML_node"]
         comments = xml_node.find("Comments")
         if comments is None:
-            comments = etree.SubElement(xml_node, "Comments")
+            comments = etree.Element("Comments")
+            xml_node.insert(0, comments)
         for diag, texts in diag_local.items():
             for comment in comments.findall("Comment"):
                 if comment.attrib.get("Operand").lower()[1:] == diag:
@@ -462,7 +463,8 @@ class App:
         # Create comments node if not existing
         comments = xml_node.find("Comments")
         if comments is None:
-            comments = etree.SubElement(xml_node, "Comments")
+            comments = etree.Element("Comments")
+            xml_node.insert(0, comments)
         # Copy AOI diagnostics to instance
         for diag, texts_aoi in diag_aoi.items():
             for comment in comments.findall("Comment"):
