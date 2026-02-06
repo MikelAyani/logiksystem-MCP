@@ -397,6 +397,8 @@ class App:
                                 if loc.attrib.get("Lang") == KEY_LANGUAGE:
                                     key = f"{ins_name}{comment.attrib.get("Operand").replace("\n", "")}"
                                     self.key_language_desc[key] = loc.text.replace("\n", "") 
+            self.current_instance = list(self.instances.keys())[0]
+            self.display_diagnostics(self.current_instance)
                        
         except Exception as e:
             print("Error loading file:", e)
@@ -532,8 +534,12 @@ class App:
         comments = xml_node.find("Comments")
         if comments is None:
             comments = etree.Element("Comments")
+            description = xml_node.find("Description")
             alarm_conditions = xml_node.find("AlarmConditions")
-            if alarm_conditions is not None:
+            if description is not None:
+                index = list(xml_node).index(description) + 1
+                xml_node.insert(index, comments)
+            elif alarm_conditions is not None:
                 index = list(xml_node).index(alarm_conditions) + 1
                 xml_node.insert(index, comments)
             else:
